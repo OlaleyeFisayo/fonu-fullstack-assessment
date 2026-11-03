@@ -9,7 +9,7 @@
     "enabled": true
   },
   "files": {
-    "includes": ["**", "!!**/dist"]
+    "includes": ["**", "!!**/dist", "!src/metadata.ts"]
   },
   "formatter": {
     "attributePosition": "auto",
@@ -31,6 +31,9 @@
     }
   },
   "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
     "formatter": {
       "arrowParentheses": "always",
       "attributePosition": "auto",
