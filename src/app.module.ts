@@ -6,7 +6,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { validateEnv } from "type-envgen";
 import { AppController } from "./app.controller";
 import { AuthModule } from "./features/auth/auth.module";
-import { dbFactory } from "./shared/configs/db.config";
+import { UserModule } from "./features/user/user.module";
+import { typeOrmFactory } from "./shared/configs/typeOrm.config";
 import { EnvConfigService, envSchema } from "./shared/env";
 
 @Module({
@@ -18,7 +19,7 @@ import { EnvConfigService, envSchema } from "./shared/env";
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: dbFactory,
+      useFactory: typeOrmFactory,
     }),
     PassportModule,
     JwtModule.registerAsync({
@@ -33,6 +34,7 @@ import { EnvConfigService, envSchema } from "./shared/env";
       }),
     }),
     AuthModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [],

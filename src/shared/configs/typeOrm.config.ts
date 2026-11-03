@@ -1,6 +1,7 @@
+import { TypeOrmModuleOptions } from "@nestjs/typeorm";
 import path from "path";
 import { DataSource, DataSourceOptions } from "typeorm";
-import { env } from "../env";
+import { EnvConfigService, env } from "../env";
 
 type DbOptionsPayload = {
   url: string;
@@ -22,3 +23,9 @@ export default new DataSource(
     url: env.DB_URL,
   }),
 );
+
+export function typeOrmFactory(config: EnvConfigService): TypeOrmModuleOptions {
+  return dbOptions({
+    url: config.get("DB_URL"),
+  });
+}

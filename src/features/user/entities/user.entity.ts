@@ -35,6 +35,7 @@ export class User {
   role: UserRole;
 
   @Column({
+    type: "varchar",
     nullable: true,
   })
   hashedRefreshToken: string | null;

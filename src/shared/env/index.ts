@@ -8,6 +8,9 @@ if (existsSync(".env")) process.loadEnvFile();
 export const envSchema = z.object({
   ACCESS_TOKEN_EXPIRES_IN: z.string(),
   ACCESS_TOKEN_SECRET: z.string(),
+  ADMIN_EMAIL: z.email(),
+  ADMIN_NAME: z.string(),
+  ADMIN_PASSWORD: z.string(),
   DB_URL: z.url(),
   REFRESH_TOKEN_EXPIRES_IN: z.string(),
   REFRESH_TOKEN_SECRET: z.string(),
