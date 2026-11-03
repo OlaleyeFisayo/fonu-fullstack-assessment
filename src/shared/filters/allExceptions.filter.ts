@@ -17,6 +17,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (!(exception instanceof HttpException)) {
       this.logger.error(exception);
+      res.locals.errorMessage = "Internal server error";
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
         .json({ data: null, message: "Internal server error", status: false });
@@ -31,6 +32,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       ? raw.join(", ")
       : (raw ?? exception.message);
 
+    res.locals.errorMessage = message;
     res
       .status(exception.getStatus())
       .json({ data: null, message, status: false });

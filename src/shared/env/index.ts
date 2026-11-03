@@ -12,6 +12,7 @@ export const envSchema = z.object({
   ADMIN_NAME: z.string(),
   ADMIN_PASSWORD: z.string(),
   DB_URL: z.url(),
+  NODE_ENV: z.enum(["development", "staging", "production"]),
   REFRESH_TOKEN_EXPIRES_IN: z.string(),
   REFRESH_TOKEN_SECRET: z.string(),
 });
