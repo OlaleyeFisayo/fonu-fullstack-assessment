@@ -6,3 +6,5 @@ export const moneyColumn: ColumnOptions = {
   scale: 2,
   transformer: { to: (v: number) => v, from: (v: string) => Number(v) },
 };
+
+export const roundMoney = (n: number) => Math.round(n * 100) / 100;

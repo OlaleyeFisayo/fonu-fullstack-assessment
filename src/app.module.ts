@@ -6,6 +6,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { validateEnv } from "type-envgen";
 import { AppController } from "./app.controller";
 import { AuthModule } from "./features/auth/auth.module";
+import { CartModule } from "./features/cart/cart.module";
 import { OrderModule } from "./features/order/order.module";
 import { ProductModule } from "./features/product/product.module";
 import { UserModule } from "./features/user/user.module";
@@ -39,6 +40,7 @@ import { EnvConfigService, envSchema } from "./shared/env";
     UserModule,
     ProductModule,
     OrderModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [],
