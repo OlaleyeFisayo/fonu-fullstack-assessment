@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
+import { moneyColumn } from "../../../shared/utils/money";
 import { User } from "../../user/entities/user.entity";
 
 export const slugify = (name: string) =>
@@ -32,12 +33,7 @@ export class Product {
   })
   description: string | null;
 
-  @Column({
-    type: "numeric",
-    precision: 12,
-    scale: 2,
-    transformer: { to: (v: number) => v, from: (v: string) => Number(v) },
-  })
+  @Column(moneyColumn)
   price: number;
 
   @Column({
