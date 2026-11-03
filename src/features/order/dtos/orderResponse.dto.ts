@@ -15,7 +15,6 @@ export class OrderResponseDto extends OmitType(Order, ["customer", "items"]) {
   @Type(() => OrderItemResponseDto)
   items: OrderItemResponseDto[];
 
-  // absent unless the customer relation was loaded
   @Expose()
   @Type(() => OrderCustomerDto)
   customer?: OrderCustomerDto;

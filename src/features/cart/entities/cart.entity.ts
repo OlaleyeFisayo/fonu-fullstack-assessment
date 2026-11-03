@@ -5,6 +5,7 @@ import {
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
+  type Relation,
   UpdateDateColumn,
 } from "typeorm";
 import { User } from "../../user/entities/user.entity";
@@ -15,7 +16,6 @@ export class Cart {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  // OneToOne + JoinColumn puts a unique customerId on cart: one cart per user
   @OneToOne(() => User, { nullable: false, onDelete: "CASCADE" })
   @JoinColumn()
   customer: User;
@@ -25,7 +25,7 @@ export class Cart {
     (item) => item.cart,
     { cascade: true },
   )
-  items: CartItem[];
+  items: Relation<CartItem[]>;
 
   @CreateDateColumn()
   createdAt: Date;

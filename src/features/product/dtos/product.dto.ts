@@ -25,5 +25,4 @@ export class ProductDto {
   stock: number;
 }
 
-// every field optional, same validation rules — for PATCH
 export class UpdateProductDto extends PartialType(ProductDto) {}

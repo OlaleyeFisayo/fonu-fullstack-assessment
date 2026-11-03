@@ -16,7 +16,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
 
     if (!(exception instanceof HttpException)) {
-      // unknown errors: log the real cause, hide it from the client
       this.logger.error(exception);
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -28,7 +27,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       typeof body === "string"
         ? body
         : (body as { message?: string | string[] }).message;
-    // ValidationPipe sends an array of messages
     const message = Array.isArray(raw)
       ? raw.join(", ")
       : (raw ?? exception.message);

@@ -9,7 +9,6 @@ export async function setupSwagger(app: INestApplication) {
     .addBearerAuth()
     .build();
 
-  // must run before createDocument, or the SWC-built DTO schemas come out empty
   await SwaggerModule.loadPluginMetadata(metadata);
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("/", app, document, { jsonDocumentUrl: "docs-json" });

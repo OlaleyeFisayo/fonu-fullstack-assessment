@@ -3,7 +3,6 @@ import { Reflector } from "@nestjs/core";
 import { JwtPayload } from "../../../shared/types";
 import { Roles } from "../decorators/roles.decorator";
 
-// must run after JwtAuthGuard, which sets req.user
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}

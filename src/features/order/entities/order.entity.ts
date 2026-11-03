@@ -5,6 +5,7 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  type Relation,
   UpdateDateColumn,
 } from "typeorm";
 import { moneyColumn } from "../../../shared/utils/money";
@@ -32,7 +33,7 @@ export class Order {
     (item) => item.order,
     { cascade: true },
   )
-  items: OrderItem[];
+  items: Relation<OrderItem[]>;
 
   @Column({
     type: "enum",

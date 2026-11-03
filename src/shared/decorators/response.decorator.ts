@@ -40,7 +40,6 @@ const dataSchema = (
   return isArray ? { type: "array", items: ref } : ref;
 };
 
-// sets the runtime message and documents the same message in Swagger
 export const ApiEnvelope = ({
   status,
   message = "Successful",

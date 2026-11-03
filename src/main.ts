@@ -7,7 +7,6 @@ import { setupSwagger } from "./shared/configs/swagger.config";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // extra configs
   setupGlobalTransformerPipe(app);
   setupGlobalResponse(app);
   await setupSwagger(app);

@@ -1,4 +1,10 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  type Relation,
+} from "typeorm";
 import { moneyColumn } from "../../../shared/utils/money";
 import { Product } from "../../product/entities/product.entity";
 import { Order } from "./order.entity";
@@ -13,7 +19,7 @@ export class OrderItem {
     (order) => order.items,
     { nullable: false, onDelete: "CASCADE" },
   )
-  order: Order;
+  order: Relation<Order>;
 
   @ManyToOne(() => Product, { nullable: true, onDelete: "SET NULL" })
   product: Product | null;
