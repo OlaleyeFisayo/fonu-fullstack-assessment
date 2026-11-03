@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-} from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -11,7 +6,7 @@ import type { EnvConfigService } from "../../../shared/env";
 import { User, UserRole } from "../entities/user.entity";
 
 @Injectable()
-export class AdminSeeder implements OnApplicationBootstrap {
+export class AdminSeeder implements OnModuleInit {
   private readonly logger = new Logger(AdminSeeder.name);
 
   constructor(
@@ -19,7 +14,7 @@ export class AdminSeeder implements OnApplicationBootstrap {
     @Inject(ConfigService) private readonly config: EnvConfigService,
   ) {}
 
-  async onApplicationBootstrap() {
+  async onModuleInit() {
     const email = this.config.get("ADMIN_EMAIL");
     const existing = await this.userRepo.findOneBy({ email });
 

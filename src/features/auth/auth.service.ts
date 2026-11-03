@@ -31,12 +31,6 @@ export class AuthService {
     return user;
   }
 
-  async findUserByEmail(email: string) {
-    const user = await this.userRepo.findOneBy({ email });
-    if (!user) throw new NotFoundException("User does not exist");
-    return user;
-  }
-
   private async validateUser(email: string, password: string) {
     const user = await this.userRepo.findOneBy({
       email: email,
@@ -80,7 +74,6 @@ export class AuthService {
       throw new UnauthorizedException("Invalid Refresh Token");
     }
 
-    // role comes from the DB, so a refresh picks up role changes
     return { userId, role: user.role } satisfies JwtPayload;
   }
 
