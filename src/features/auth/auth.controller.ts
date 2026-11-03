@@ -71,10 +71,8 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: "Invalid refresh token" })
   async refreshToken(
     @Body() _body: RefreshTokenDto,
-    @Req() req: {
-      user: Awaited<ReturnType<AuthService["verifyRefreshToken"]>>;
-    },
+    @Req() req: { user: JwtPayload },
   ): Promise<RefreshTokenResponseDto> {
-    return await this.authService.refreshToken(req.user.id);
+    return await this.authService.refreshToken(req.user);
   }
 }

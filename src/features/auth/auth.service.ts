@@ -51,11 +51,7 @@ export class AuthService {
     return user;
   }
 
-  private async generateAuthTokens(userId: string) {
-    const payload: JwtPayload = {
-      userId,
-    };
-
+  private async generateAuthTokens(payload: JwtPayload) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.sign(payload),
       this.jwtService.sign(payload, {
@@ -84,7 +80,8 @@ export class AuthService {
       throw new UnauthorizedException("Invalid Refresh Token");
     }
 
-    return { id: userId };
+    // role comes from the DB, so a refresh picks up role changes
+    return { userId, role: user.role } satisfies JwtPayload;
   }
 
   async signUp(signUpDto: SignUpDto) {
@@ -104,9 +101,10 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<LoginResponseDto> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
-    const { accessToken, refreshToken } = await this.generateAuthTokens(
-      user.id,
-    );
+    const { accessToken, refreshToken } = await this.generateAuthTokens({
+      userId: user.id,
+      role: user.role,
+    });
 
     await this.userRepo.update(
       { id: user.id },
@@ -121,10 +119,11 @@ export class AuthService {
     };
   }
 
-  async refreshToken(userId: string) {
-    const { accessToken, refreshToken } = await this.generateAuthTokens(userId);
+  async refreshToken(payload: JwtPayload) {
+    const { accessToken, refreshToken } =
+      await this.generateAuthTokens(payload);
     await this.userRepo.update(
-      { id: userId },
+      { id: payload.userId },
       { hashedRefreshToken: await hash(refreshToken) },
     );
     return {
