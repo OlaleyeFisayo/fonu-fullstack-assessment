@@ -1,7 +1,7 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { setupGlobalResponse } from "./shared/configs/globalResponse.config";
-import { setupGlobalTransformerPipe } from "./shared/configs/globalTransformerPipe";
+import { setupGlobalTransformerPipe } from "./shared/configs/globalTransformerPipe.config";
 import { setupSwagger } from "./shared/configs/swagger.config";
 
 async function bootstrap() {
