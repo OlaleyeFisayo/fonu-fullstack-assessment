@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
@@ -31,6 +36,10 @@ describe("OrderService", () => {
     save: jest.fn(async (data) => data),
   };
   const dataSource = { manager, transaction: jest.fn((cb) => cb(manager)) };
+  const config: Record<string, string> = {
+    REPORTING_URL: "http://reporting:3001",
+    REPORTING_TOKEN: "secret",
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -39,6 +48,10 @@ describe("OrderService", () => {
         OrderService,
         { provide: getRepositoryToken(Order), useValue: orderRepo },
         { provide: DataSource, useValue: dataSource },
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => config[key] },
+        },
       ],
     }).compile();
     service = module.get(OrderService);
@@ -242,6 +255,50 @@ describe("OrderService", () => {
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
       expect(products.map((p) => p.stock)).toEqual([3, 2]);
+    });
+  });
+
+  describe("getSummary", () => {
+    const query = { from: "2026-01-01", to: "2026-01-31" };
+    const reply = (status: number, body: unknown) =>
+      jest
+        .spyOn(global, "fetch")
+        .mockResolvedValue(new Response(JSON.stringify(body), { status }));
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it("calls the reporting service with the token and dates", async () => {
+      const summary = { totalOrders: 3, revenue: "60.00" };
+      const fetchSpy = reply(200, summary);
+
+      await expect(service.getSummary(query)).resolves.toEqual(summary);
+
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(String(url)).toBe(
+        "http://reporting:3001/orders/summary?from=2026-01-01&to=2026-01-31",
+      );
+      expect(init?.headers).toEqual({ "X-Internal-Token": "secret" });
+    });
+
+    it("passes a 400 from the reporting service through", async () => {
+      reply(400, { error: "from must be on or before to" });
+      await expect(service.getSummary(query)).rejects.toThrow(
+        new BadRequestException("from must be on or before to"),
+      );
+    });
+
+    it("throws 503 when the reporting service errors", async () => {
+      reply(500, { error: "failed to build summary" });
+      await expect(service.getSummary(query)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+
+    it("throws 503 when the reporting service is unreachable", async () => {
+      jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("failed"));
+      await expect(service.getSummary(query)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
     });
   });
 });

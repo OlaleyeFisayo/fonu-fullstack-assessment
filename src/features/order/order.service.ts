@@ -1,8 +1,11 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   DataSource,
@@ -11,6 +14,7 @@ import {
   In,
   Repository,
 } from "typeorm";
+import type { EnvConfigService } from "../../shared/env";
 import { JwtPayload } from "../../shared/types";
 import { pageOptions, paginate } from "../../shared/utils/paginate";
 import { toDto } from "../../shared/utils/toDto";
@@ -18,6 +22,8 @@ import { Product } from "../product/entities/product.entity";
 import { UserRole } from "../user/entities/user.entity";
 import { OrderQueryDto } from "./dtos/orderQuery.dto";
 import { OrderResponseDto } from "./dtos/orderResponse.dto";
+import { OrderSummaryQueryDto } from "./dtos/orderSummaryQuery.dto";
+import { OrderSummaryResponseDto } from "./dtos/orderSummaryResponse.dto";
 import { UpdateOrderStatusDto } from "./dtos/updateOrderStatus.dto";
 import { Order, OrderStatus } from "./entities/order.entity";
 
@@ -34,6 +40,7 @@ export class OrderService {
   constructor(
     @InjectRepository(Order) private readonly orderRepo: Repository<Order>,
     private readonly dataSource: DataSource,
+    @Inject(ConfigService) private readonly config: EnvConfigService,
   ) {}
 
   private scope(user: JwtPayload): FindOptionsWhere<Order> {
@@ -97,6 +104,29 @@ export class OrderService {
     });
 
     return paginate(toDto(OrderResponseDto, orders), total, query);
+  }
+
+  async getSummary(query: OrderSummaryQueryDto) {
+    const url = new URL("/orders/summary", this.config.get("REPORTING_URL"));
+    url.search = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+    }).toString();
+
+    const unavailable = new ServiceUnavailableException(
+      "Reporting service is unavailable",
+    );
+    const res = await fetch(url, {
+      headers: { "X-Internal-Token": this.config.get("REPORTING_TOKEN") },
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {
+      throw unavailable;
+    });
+
+    const body = await res.json().catch(() => null);
+    if (res.status === 400) throw new BadRequestException(body?.error);
+    if (!res.ok) throw unavailable;
+    return body as OrderSummaryResponseDto;
   }
 
   async getOrder(user: JwtPayload, orderId: string) {

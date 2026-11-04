@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
@@ -28,6 +29,8 @@ import { User, UserRole } from "../user/entities/user.entity";
 import { RolesGuard } from "../user/guards/rolesGuard";
 import { OrderQueryDto } from "./dtos/orderQuery.dto";
 import { OrderResponseDto } from "./dtos/orderResponse.dto";
+import { OrderSummaryQueryDto } from "./dtos/orderSummaryQuery.dto";
+import { OrderSummaryResponseDto } from "./dtos/orderSummaryResponse.dto";
 import { UpdateOrderStatusDto } from "./dtos/updateOrderStatus.dto";
 import { OrderService } from "./order.service";
 
@@ -52,6 +55,22 @@ export class OrderController {
     @Query() query: OrderQueryDto,
   ) {
     return await this.orderService.listOrders(req.user, query);
+  }
+
+  @Get("summary")
+  @Roles([UserRole.ADMIN])
+  @ApiEnvelope({
+    status: 200,
+    message: "Order summary retrieved",
+    type: OrderSummaryResponseDto,
+  })
+  @ApiBadRequestResponse({ description: "Invalid date range" })
+  @ApiForbiddenResponse({ description: "Admins only" })
+  @ApiServiceUnavailableResponse({
+    description: "Reporting service is unavailable",
+  })
+  async getSummary(@Query() query: OrderSummaryQueryDto) {
+    return await this.orderService.getSummary(query);
   }
 
   @Get(":orderId")

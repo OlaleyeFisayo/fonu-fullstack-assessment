@@ -1,7 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import { existsSync } from "fs";
-import { validateEnv } from "type-envgen";
 import { z } from "zod";
+import { validateEnv } from "type-envgen";
 
 if (existsSync(".env")) process.loadEnvFile();
 
@@ -12,9 +12,12 @@ export const envSchema = z.object({
   ADMIN_NAME: z.string(),
   ADMIN_PASSWORD: z.string(),
   DB_URL: z.url(),
-  NODE_ENV: z.enum(["development", "staging", "production"]),
+  NODE_ENV: z.enum(["development","staging","production"]),
   REFRESH_TOKEN_EXPIRES_IN: z.string(),
   REFRESH_TOKEN_SECRET: z.string(),
+  REPORTING_PORT: z.coerce.number().int(),
+  REPORTING_TOKEN: z.string(),
+  REPORTING_URL: z.string(),
 });
 
 export const env = validateEnv(envSchema, process.env);

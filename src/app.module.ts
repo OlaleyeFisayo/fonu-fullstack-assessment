@@ -19,6 +19,8 @@ import { EnvConfigService, envSchema } from "./shared/env";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      expandVariables: true,
+      override: true,
       validate: (config) => validateEnv(envSchema, config),
     }),
     TypeOrmModule.forRootAsync({

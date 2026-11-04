@@ -11,6 +11,7 @@
     "check": "biome check --write",
     "start": "nest start",
     "start:dev": "nest start --watch",
+    "dev": "concurrently -n api,reporting -c blue,green \"pnpm start:dev\" \"go -C services/reporting run .\"",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "biome lint --write",
@@ -65,6 +66,7 @@
     "@types/node": "^24.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^7.0.0",
+    "concurrently": "^10.0.6",
     "jest": "^30.5.2",
     "pino-pretty": "^13.2.0",
     "source-map-support": "^0.5.21",
@@ -76,7 +78,11 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
@@ -84,15 +90,25 @@
         "@swc/jest",
         {
           "jsc": {
-            "parser": { "syntax": "typescript", "decorators": true },
-            "transform": { "legacyDecorator": true, "decoratorMetadata": true },
+            "parser": {
+              "syntax": "typescript",
+              "decorators": true
+            },
+            "transform": {
+              "legacyDecorator": true,
+              "decoratorMetadata": true
+            },
             "target": "es2022"
           }
         }
       ]
     },
-    "transformIgnorePatterns": ["node_modules/(?!\\.pnpm|@nestjs/)"],
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "transformIgnorePatterns": [
+      "node_modules/(?!\\.pnpm|@nestjs/)"
+    ],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }
