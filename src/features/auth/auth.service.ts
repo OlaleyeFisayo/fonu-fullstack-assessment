@@ -9,7 +9,6 @@ import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { hash, verify } from "argon2";
 import { FindOptionsWhere, Repository } from "typeorm";
-import { FindOptions } from "typeorm/driver/mongodb/typings.js";
 import type { EnvConfigService } from "../../shared/env";
 import { JwtPayload } from "../../shared/types";
 import { saveUnique } from "../../shared/utils/saveUnique";
