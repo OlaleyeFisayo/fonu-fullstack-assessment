@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Min,
 } from "class-validator";
 
 export class ProductDto {
@@ -22,6 +23,7 @@ export class ProductDto {
   price: number;
 
   @IsInt()
+  @Min(0)
   stock: number;
 }
 

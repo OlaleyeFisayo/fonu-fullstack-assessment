@@ -1,5 +1,6 @@
 import {
   BeforeInsert,
+  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
@@ -51,6 +52,7 @@ export class Product {
   updatedAt: Date;
 
   @BeforeInsert()
+  @BeforeUpdate()
   setSlug() {
     this.slug = slugify(this.name);
   }

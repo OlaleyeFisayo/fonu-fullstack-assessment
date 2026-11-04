@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { FindOptionsWhere, ILike, Repository } from "typeorm";
+import { FindOptionsWhere, ILike, QueryFailedError, Repository } from "typeorm";
 import { pageOptions, paginate } from "../../shared/utils/paginate";
 import { toDto } from "../../shared/utils/toDto";
 import { ProductDto, UpdateProductDto } from "./dtos/product.dto";
@@ -22,8 +26,21 @@ export class ProductService {
     return product;
   }
 
+  private async saveProduct(product: Product) {
+    try {
+      return await this.productRepo.save(product);
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: string }).code === "23505"
+      )
+        throw new ConflictException("Product with this name already exists");
+      throw error;
+    }
+  }
+
   async createProduct(userId: string, productDto: ProductDto) {
-    const product = await this.productRepo.save(
+    const product = await this.saveProduct(
       this.productRepo.create({ ...productDto, createdBy: { id: userId } }),
     );
 
@@ -47,7 +64,7 @@ export class ProductService {
   async updateProduct(productId: string, productDto: UpdateProductDto) {
     const product = await this.findProduct({ id: productId });
     this.productRepo.merge(product, productDto);
-    return toDto(ProductResponseDto, await this.productRepo.save(product));
+    return toDto(ProductResponseDto, await this.saveProduct(product));
   }
 
   async deleteProduct(productId: string) {

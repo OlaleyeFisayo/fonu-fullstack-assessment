@@ -14,6 +14,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiTags,
@@ -58,6 +59,7 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiBadRequestResponse({ description: "Invalid product data" })
+  @ApiConflictResponse({ description: "Product name already in use" })
   @ApiForbiddenResponse({ description: "Admins only" })
   async createProduct(
     @Req() req: { user: JwtPayload },
@@ -85,6 +87,7 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiBadRequestResponse({ description: "Invalid product data" })
+  @ApiConflictResponse({ description: "Product name already in use" })
   @ApiForbiddenResponse({ description: "Admins only" })
   @ApiNotFoundResponse({ description: "Product does not exist" })
   async updateProduct(
