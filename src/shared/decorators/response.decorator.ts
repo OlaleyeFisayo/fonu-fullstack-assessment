@@ -14,12 +14,7 @@ type EnvelopeOptions = {
 
 const metaNumber = (example: number) => ({ type: "number", example });
 
-const dataSchema = (
-  type: Type | undefined,
-  isArray: boolean,
-  paginated: boolean,
-) => {
-  if (!type) return { nullable: true, example: null };
+const dataSchema = (type: Type, isArray: boolean, paginated: boolean) => {
   const ref = { $ref: getSchemaPath(type) };
   if (paginated)
     return {
@@ -55,7 +50,7 @@ export const ApiEnvelope = ({
       description: message,
       schema: {
         properties: {
-          data: dataSchema(type, isArray, paginated),
+          ...(type ? { data: dataSchema(type, isArray, paginated) } : {}),
           message: { type: "string", example: message },
           status: { type: "boolean", example: true },
         },

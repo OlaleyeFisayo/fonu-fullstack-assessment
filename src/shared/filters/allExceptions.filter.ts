@@ -20,7 +20,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       res.locals.errorMessage = "Internal server error";
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .json({ data: null, message: "Internal server error", status: false });
+        .json({ message: "Internal server error", status: false });
     }
 
     const body = exception.getResponse();
@@ -33,8 +33,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       : (raw ?? exception.message);
 
     res.locals.errorMessage = message;
-    res
-      .status(exception.getStatus())
-      .json({ data: null, message, status: false });
+    res.status(exception.getStatus()).json({ message, status: false });
   }
 }

@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,9 +8,11 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { hash, verify } from "argon2";
-import { Repository } from "typeorm";
+import { FindOptionsWhere, Repository } from "typeorm";
+import { FindOptions } from "typeorm/driver/mongodb/typings.js";
 import type { EnvConfigService } from "../../shared/env";
 import { JwtPayload } from "../../shared/types";
+import { saveUnique } from "../../shared/utils/saveUnique";
 import { User } from "../user/entities/user.entity";
 import { LoginDto } from "./dtos/login.dto";
 import { LoginResponseDto } from "./dtos/loginResponse.dto";
@@ -25,21 +26,16 @@ export class AuthService {
     @Inject(ConfigService) private readonly config: EnvConfigService,
   ) {}
 
-  async findUserById(userId: string) {
-    const user = await this.userRepo.findOneBy({ id: userId });
+  private async findUser(where: FindOptionsWhere<User>) {
+    const user = await this.userRepo.findOneBy(where);
     if (!user) throw new NotFoundException("User does not exist");
     return user;
   }
 
   private async validateUser(email: string, password: string) {
-    const user = await this.userRepo.findOneBy({
-      email: email,
-    });
+    const user = await this.findUser({ email });
 
-    if (!user) throw new UnauthorizedException("User does not exist");
-
-    const isPasswordAMatch = await verify(user.password, password);
-    if (!isPasswordAMatch)
+    if (!(await verify(user.password, password)))
       throw new UnauthorizedException("Invalid Credentials");
 
     return user;
@@ -57,7 +53,10 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async verifyRefreshToken(userId: string, refreshToken: string) {
+  async verifyRefreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<JwtPayload> {
     try {
       await this.jwtService.verifyAsync(refreshToken, {
         secret: this.config.get("REFRESH_TOKEN_SECRET"),
@@ -66,7 +65,7 @@ export class AuthService {
       throw new UnauthorizedException("Invalid Refresh Token");
     }
 
-    const user = await this.findUserById(userId);
+    const user = await this.findUser({ id: userId });
     if (
       !user.hashedRefreshToken ||
       !(await verify(user.hashedRefreshToken, refreshToken))
@@ -74,21 +73,15 @@ export class AuthService {
       throw new UnauthorizedException("Invalid Refresh Token");
     }
 
-    return { userId, role: user.role } satisfies JwtPayload;
+    return { userId, role: user.role };
   }
 
   async signUp(signUpDto: SignUpDto) {
-    const exisitingUser = await this.userRepo.findOne({
-      where: {
-        email: signUpDto.email,
-      },
-    });
-    if (exisitingUser) {
-      throw new ConflictException("User with this email already exists");
-    }
-
     const newUser = this.userRepo.create(signUpDto);
-    await this.userRepo.save(newUser);
+    await saveUnique(
+      () => this.userRepo.save(newUser),
+      "User with this email already exists",
+    );
   }
 
   async login(loginDto: LoginDto): Promise<LoginResponseDto> {

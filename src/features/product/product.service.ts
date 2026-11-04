@@ -1,11 +1,8 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { FindOptionsWhere, ILike, QueryFailedError, Repository } from "typeorm";
+import { FindOptionsWhere, ILike, Repository } from "typeorm";
 import { pageOptions, paginate } from "../../shared/utils/paginate";
+import { saveUnique } from "../../shared/utils/saveUnique";
 import { toDto } from "../../shared/utils/toDto";
 import { ProductDto, UpdateProductDto } from "./dtos/product.dto";
 import { ProductQueryDto } from "./dtos/productQuery.dto";
@@ -26,17 +23,11 @@ export class ProductService {
     return product;
   }
 
-  private async saveProduct(product: Product) {
-    try {
-      return await this.productRepo.save(product);
-    } catch (error) {
-      if (
-        error instanceof QueryFailedError &&
-        (error.driverError as { code?: string }).code === "23505"
-      )
-        throw new ConflictException("Product with this name already exists");
-      throw error;
-    }
+  private saveProduct(product: Product) {
+    return saveUnique(
+      () => this.productRepo.save(product),
+      "Product with this name already exists",
+    );
   }
 
   async createProduct(userId: string, productDto: ProductDto) {

@@ -2,10 +2,19 @@ package order
 
 import (
 	"context"
+	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+type totals struct {
+	Count   int
+	Revenue string
+}
 
 type Service struct {
 	pool *pgxpool.Pool
@@ -15,26 +24,40 @@ func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }
 
-func (s *Service) Summary(ctx context.Context, from, to string) (SummaryResponse, error) {
-	res := SummaryResponse{From: from, To: to}
+func createdBetween(col string, from, to time.Time) sq.And {
+	return sq.And{sq.GtOrEq{col: from}, sq.Lt{col: to.AddDate(0, 0, 1)}}
+}
 
-	err := s.pool.QueryRow(ctx, `
-		SELECT COUNT(*)::int,
-		       COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0)::text
-		FROM "order"
-		WHERE "createdAt" >= $1::date AND "createdAt" < $2::date + 1`,
-		from, to).Scan(&res.TotalOrders, &res.Revenue)
+func (s *Service) run(ctx context.Context, b sq.SelectBuilder) (pgx.Rows, error) {
+	query, args, err := b.ToSql()
+	if err != nil {
+		return nil, err
+	}
+	return s.pool.Query(ctx, query, args...)
+}
+
+func (s *Service) Summary(ctx context.Context, from, to time.Time) (SummaryResponse, error) {
+	res := SummaryResponse{From: from.Format(dateLayout), To: to.Format(dateLayout)}
+
+	rows, err := s.run(ctx, psql.
+		Select("COUNT(*)::int", "COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0)::text").
+		From(`"order"`).
+		Where(createdBetween(`"createdAt"`, from, to)))
 	if err != nil {
 		return res, err
 	}
+	t, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[totals])
+	if err != nil {
+		return res, err
+	}
+	res.TotalOrders, res.Revenue = t.Count, t.Revenue
 
-	rows, err := s.pool.Query(ctx, `
-		SELECT status::text, COUNT(*)::int, COALESCE(SUM(total), 0)::text
-		FROM "order"
-		WHERE "createdAt" >= $1::date AND "createdAt" < $2::date + 1
-		GROUP BY status
-		ORDER BY status`,
-		from, to)
+	rows, err = s.run(ctx, psql.
+		Select("status::text", "COUNT(*)::int", "COALESCE(SUM(total), 0)::text").
+		From(`"order"`).
+		Where(createdBetween(`"createdAt"`, from, to)).
+		GroupBy("status").
+		OrderBy("status"))
 	if err != nil {
 		return res, err
 	}
@@ -43,16 +66,15 @@ func (s *Service) Summary(ctx context.Context, from, to string) (SummaryResponse
 		return res, err
 	}
 
-	rows, err = s.pool.Query(ctx, `
-		SELECT oi."productName", SUM(oi.quantity)::int AS qty
-		FROM order_item oi
-		JOIN "order" o ON o.id = oi."orderId"
-		WHERE o.status <> 'cancelled'
-		  AND o."createdAt" >= $1::date AND o."createdAt" < $2::date + 1
-		GROUP BY oi."productName"
-		ORDER BY qty DESC
-		LIMIT 5`,
-		from, to)
+	rows, err = s.run(ctx, psql.
+		Select(`oi."productName"`, "SUM(oi.quantity)::int AS qty").
+		From("order_item oi").
+		Join(`"order" o ON o.id = oi."orderId"`).
+		Where(sq.NotEq{"o.status": "cancelled"}).
+		Where(createdBetween(`o."createdAt"`, from, to)).
+		GroupBy(`oi."productName"`).
+		OrderBy("qty DESC").
+		Limit(5))
 	if err != nil {
 		return res, err
 	}

@@ -8,6 +8,7 @@ import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { hash, verify } from "argon2";
+import { QueryFailedError } from "typeorm";
 import { User, UserRole } from "../user/entities/user.entity";
 import { AuthService } from "./auth.service";
 
@@ -67,18 +68,27 @@ describe("AuthService", () => {
     const dto = { name: "Ada", email: "ada@test.com", password: "secret" };
 
     it("saves a new user", async () => {
-      repo.findOne.mockResolvedValue(null);
       await service.signUp(dto);
       expect(repo.create).toHaveBeenCalledWith(dto);
       expect(repo.save).toHaveBeenCalledWith(dto);
     });
 
     it("throws Conflict when the email is taken", async () => {
-      repo.findOne.mockResolvedValue(user());
+      repo.save.mockRejectedValueOnce(
+        new QueryFailedError(
+          "INSERT",
+          [],
+          Object.assign(new Error("dup"), { code: "23505" }),
+        ),
+      );
       await expect(service.signUp(dto)).rejects.toBeInstanceOf(
         ConflictException,
       );
-      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("rethrows other database errors", async () => {
+      repo.save.mockRejectedValueOnce(new Error("db down"));
+      await expect(service.signUp(dto)).rejects.toThrow("db down");
     });
   });
 

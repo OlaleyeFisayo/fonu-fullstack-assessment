@@ -15,6 +15,8 @@ export class ResponseInterceptor implements NestInterceptor {
       this.reflector.get(ResponseMessage, context.getHandler()) ?? "Successful";
     return next
       .handle()
-      .pipe(map((data) => ({ data: data ?? null, message, status: true })));
+      .pipe(
+        map((data) => ({ ...(data ? { data } : {}), message, status: true })),
+      );
   }
 }
