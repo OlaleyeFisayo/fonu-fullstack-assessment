@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import type { EnvConfigService } from "../../../shared/env";
-import { AuthUser, JwtPayload } from "../../../shared/types";
+import { JwtPayload } from "../../../shared/types";
 import { AuthService } from "../auth.service";
 import { TokenType } from "../entities/token.entity";
 
@@ -20,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
     });
   }
 
-  async validate(payload: JwtPayload): Promise<AuthUser> {
+  async validate(payload: JwtPayload): Promise<JwtPayload> {
     const { userId, role, jti, sid } = payload;
     if (
       !jti ||

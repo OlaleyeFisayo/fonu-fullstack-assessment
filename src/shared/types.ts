@@ -1,10 +1,11 @@
 import { UserRole } from "../features/user/entities/user.entity";
 
-export type JwtPayload = {
+export type TokenClaims = {
   userId: string;
   role: UserRole;
-  sid?: string;
-  jti?: string;
 };
 
-export type AuthUser = JwtPayload & Required<Pick<JwtPayload, "jti" | "sid">>;
+export type JwtPayload = TokenClaims & {
+  sid: string;
+  jti: string;
+};

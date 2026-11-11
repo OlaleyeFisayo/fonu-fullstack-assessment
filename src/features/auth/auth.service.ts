@@ -17,7 +17,7 @@ import {
   Repository,
 } from "typeorm";
 import type { EnvConfigService } from "../../shared/env";
-import { AuthUser, JwtPayload } from "../../shared/types";
+import { JwtPayload, TokenClaims } from "../../shared/types";
 import { saveUnique } from "../../shared/utils/saveUnique";
 import { User } from "../user/entities/user.entity";
 import { LoginDto } from "./dtos/login.dto";
@@ -55,7 +55,7 @@ export class AuthService {
   }
 
   private async generateAuthTokens(
-    { userId, role }: JwtPayload,
+    { userId, role }: TokenClaims,
     sessionId: string = randomUUID(),
     manager: EntityManager = this.tokenRepo.manager,
   ) {
@@ -112,7 +112,7 @@ export class AuthService {
     });
   }
 
-  async verifyRefreshToken(claims: JwtPayload): Promise<AuthUser> {
+  async verifyRefreshToken(claims: JwtPayload): Promise<JwtPayload> {
     const { userId, jti, sid } = claims;
     if (!jti || !sid) throw new UnauthorizedException("Invalid Refresh Token");
 
@@ -154,7 +154,7 @@ export class AuthService {
     };
   }
 
-  async refreshToken({ userId, role, jti, sid }: AuthUser) {
+  async refreshToken({ userId, role, jti, sid }: JwtPayload) {
     return await this.tokenRepo.manager.transaction(async (manager) => {
       const claimed = await this.revokeWhere({ id: jti }, manager);
       if (claimed.affected !== 1)

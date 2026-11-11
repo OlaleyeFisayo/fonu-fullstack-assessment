@@ -15,7 +15,7 @@ import {
   Repository,
 } from "typeorm";
 import type { EnvConfigService } from "../../shared/env";
-import { JwtPayload } from "../../shared/types";
+import { TokenClaims } from "../../shared/types";
 import { pageOptions, paginate } from "../../shared/utils/paginate";
 import { toDto } from "../../shared/utils/toDto";
 import { Product } from "../product/entities/product.entity";
@@ -43,7 +43,7 @@ export class OrderService {
     @Inject(ConfigService) private readonly config: EnvConfigService,
   ) {}
 
-  private scope(user: JwtPayload): FindOptionsWhere<Order> {
+  private scope(user: TokenClaims): FindOptionsWhere<Order> {
     return user.role === UserRole.ADMIN
       ? {}
       : { customer: { id: user.userId } };
@@ -92,7 +92,7 @@ export class OrderService {
     return manager.save(order);
   }
 
-  async listOrders(user: JwtPayload, query: OrderQueryDto) {
+  async listOrders(user: TokenClaims, query: OrderQueryDto) {
     const [orders, total] = await this.orderRepo.findAndCount({
       where: {
         ...this.scope(user),
@@ -129,7 +129,7 @@ export class OrderService {
     return body as OrderSummaryResponseDto;
   }
 
-  async getOrder(user: JwtPayload, orderId: string) {
+  async getOrder(user: TokenClaims, orderId: string) {
     const order = await this.findOrder(this.dataSource.manager, {
       id: orderId,
       ...this.scope(user),
@@ -148,7 +148,7 @@ export class OrderService {
     return toDto(OrderResponseDto, order);
   }
 
-  async cancelOrder(user: JwtPayload, orderId: string) {
+  async cancelOrder(user: TokenClaims, orderId: string) {
     const order = await this.dataSource.transaction(async (manager) => {
       const order = await this.findOrder(manager, {
         id: orderId,

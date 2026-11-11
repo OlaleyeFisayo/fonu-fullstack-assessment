@@ -10,6 +10,7 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { verify } from "argon2";
 import { IsNull, MoreThan, QueryFailedError } from "typeorm";
 import { User, UserRole } from "../user/entities/user.entity";
+import { JwtPayload } from "../../shared/types";
 import { AuthService } from "./auth.service";
 import { Token, TokenType } from "./entities/token.entity";
 
@@ -202,7 +203,10 @@ describe("AuthService", () => {
 
     it("rejects a token without jti/sid", async () => {
       await expect(
-        service.verifyRefreshToken({ userId: "u1", role: UserRole.CUSTOMER }),
+        service.verifyRefreshToken({
+          userId: "u1",
+          role: UserRole.CUSTOMER,
+        } as JwtPayload),
       ).rejects.toBeInstanceOf(UnauthorizedException);
       expect(tokenRepo.findOne).not.toHaveBeenCalled();
     });
