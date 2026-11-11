@@ -34,7 +34,8 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.With(guards.InternalToken(cfg.ReportingToken)).Mount("/orders", order.Routes(orderController))
+	r.Use(guards.InternalToken(cfg.ReportingToken))
+	r.Mount("/orders", order.Routes(orderController))
 
 	log.Println("reporting service listening on :" + cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))
