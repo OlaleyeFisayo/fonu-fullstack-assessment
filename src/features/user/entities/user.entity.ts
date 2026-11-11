@@ -1,11 +1,5 @@
 import { hash } from "argon2";
-import {
-  BeforeInsert,
-  Column,
-  Entity,
-  PrimaryGeneratedColumn,
-  Unique,
-} from "typeorm";
+import { BeforeInsert, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
 
 export enum UserRole {
   ADMIN = "admin",
@@ -32,12 +26,6 @@ export class User {
     default: UserRole.CUSTOMER,
   })
   role: UserRole;
-
-  @Column({
-    type: "varchar",
-    nullable: true,
-  })
-  hashedRefreshToken: string | null;
 
   @BeforeInsert()
   async hashPassword() {

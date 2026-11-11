@@ -7,10 +7,11 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
-import { hash, verify } from "argon2";
-import { QueryFailedError } from "typeorm";
+import { verify } from "argon2";
+import { IsNull, MoreThan, QueryFailedError } from "typeorm";
 import { User, UserRole } from "../user/entities/user.entity";
 import { AuthService } from "./auth.service";
+import { Token, TokenType } from "./entities/token.entity";
 
 jest.mock("argon2", () => ({
   hash: jest.fn(async (v: string) => `hashed:${v}`),
@@ -26,7 +27,6 @@ const user = (overrides: Partial<User> = {}) =>
     email: "ada@test.com",
     password: "hashed:secret",
     role: UserRole.CUSTOMER,
-    hashedRefreshToken: "hashed:refresh",
     ...overrides,
   }) as User;
 
@@ -34,6 +34,11 @@ const CONFIG: Record<string, string> = {
   REFRESH_TOKEN_SECRET: "refresh-secret",
   REFRESH_TOKEN_EXPIRES_IN: "7d",
 };
+
+const EXP = 1_900_000_000;
+
+type SignOptions = { jwtid: string; secret?: string; expiresIn?: string };
+type TokenRow = { id: string; sessionId: string };
 
 describe("AuthService", () => {
   let service: AuthService;
@@ -45,18 +50,37 @@ describe("AuthService", () => {
     update: jest.fn(),
   };
   const jwt = {
-    sign: jest.fn((_payload, options?: { secret?: string }) =>
+    sign: jest.fn((_payload, options?: SignOptions) =>
       options?.secret ? "refresh-token" : "access-token",
     ),
-    verifyAsync: jest.fn(),
+    decode: jest.fn(() => ({ exp: EXP })),
   };
+  const manager = {
+    insert: jest.fn(),
+    update: jest.fn(),
+    transaction: jest.fn(),
+  };
+  const tokenRepo = {
+    findOne: jest.fn(),
+    exists: jest.fn(),
+    delete: jest.fn(),
+    manager,
+  };
+
+  const insertedRows = (call = 0) =>
+    manager.insert.mock.calls[call][1] as TokenRow[];
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    manager.update.mockResolvedValue({ affected: 1 });
+    manager.transaction.mockImplementation(
+      (cb: (m: typeof manager) => unknown) => cb(manager),
+    );
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: repo },
+        { provide: getRepositoryToken(Token), useValue: tokenRepo },
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: { get: (k: string) => CONFIG[k] } },
       ],
@@ -108,10 +132,10 @@ describe("AuthService", () => {
       await expect(service.login(dto)).rejects.toThrow(
         new UnauthorizedException("Invalid Credentials"),
       );
-      expect(repo.update).not.toHaveBeenCalled();
+      expect(manager.insert).not.toHaveBeenCalled();
     });
 
-    it("returns tokens and stores the hashed refresh token", async () => {
+    it("returns tokens and records both in the token table", async () => {
       repo.findOneBy.mockResolvedValue(user());
       verifyMock.mockResolvedValue(true);
 
@@ -123,87 +147,169 @@ describe("AuthService", () => {
         accessToken: "access-token",
         refreshToken: "refresh-token",
       });
-      expect(jwt.sign).toHaveBeenCalledWith(
-        { userId: "u1", role: UserRole.CUSTOMER },
-        { secret: "refresh-secret", expiresIn: "7d" },
-      );
-      expect(hash).toHaveBeenCalledWith("refresh-token");
-      expect(repo.update).toHaveBeenCalledWith(
-        { id: "u1" },
-        { hashedRefreshToken: "hashed:refresh-token" },
+
+      const [[accessClaims, accessOpts], [refreshClaims, refreshOpts]] = jwt
+        .sign.mock.calls as [{ sid: string }, SignOptions][];
+      expect(refreshOpts).toMatchObject({
+        secret: "refresh-secret",
+        expiresIn: "7d",
+      });
+      expect(accessClaims).toEqual({
+        userId: "u1",
+        role: UserRole.CUSTOMER,
+        sid: expect.any(String),
+      });
+      expect(refreshClaims).toEqual(accessClaims);
+      expect(accessOpts.jwtid).not.toEqual(refreshOpts.jwtid);
+
+      expect(manager.insert.mock.calls[0][0]).toBe(Token);
+      expect(insertedRows()).toEqual([
+        {
+          id: accessOpts.jwtid,
+          sessionId: accessClaims.sid,
+          user: { id: "u1" },
+          type: TokenType.ACCESS,
+          expiresAt: new Date(EXP * 1000),
+        },
+        {
+          id: refreshOpts.jwtid,
+          sessionId: accessClaims.sid,
+          user: { id: "u1" },
+          type: TokenType.REFRESH,
+          expiresAt: new Date(EXP * 1000),
+        },
+      ]);
+    });
+
+    it("starts a new session on every login", async () => {
+      repo.findOneBy.mockResolvedValue(user());
+      verifyMock.mockResolvedValue(true);
+      await service.login(dto);
+      await service.login(dto);
+      expect(insertedRows(0)[0].sessionId).not.toEqual(
+        insertedRows(1)[0].sessionId,
       );
     });
   });
 
   describe("verifyRefreshToken", () => {
-    it("rejects an invalid or expired token", async () => {
-      jwt.verifyAsync.mockRejectedValue(new Error("jwt expired"));
+    const claims = {
+      userId: "u1",
+      role: UserRole.CUSTOMER,
+      jti: "r1",
+      sid: "s1",
+    };
+
+    it("rejects a token without jti/sid", async () => {
       await expect(
-        service.verifyRefreshToken("u1", "bad"),
+        service.verifyRefreshToken({ userId: "u1", role: UserRole.CUSTOMER }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
-      expect(jwt.verifyAsync).toHaveBeenCalledWith("bad", {
-        secret: "refresh-secret",
+      expect(tokenRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it("rejects a token that is not in the table", async () => {
+      tokenRepo.findOne.mockResolvedValue(null);
+      await expect(service.verifyRefreshToken(claims)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(tokenRepo.findOne).toHaveBeenCalledWith({
+        where: { id: "r1", type: TokenType.REFRESH, user: { id: "u1" } },
       });
+    });
+
+    it("revokes every session of the user when a revoked token is replayed", async () => {
+      tokenRepo.findOne.mockResolvedValue({ id: "r1", revokedAt: new Date() });
+      await expect(service.verifyRefreshToken(claims)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(manager.update).toHaveBeenCalledWith(
+        Token,
+        { user: { id: "u1" }, revokedAt: IsNull() },
+        { revokedAt: expect.any(Date) },
+      );
     });
 
     it("throws NotFound when the user was deleted", async () => {
-      jwt.verifyAsync.mockResolvedValue({});
+      tokenRepo.findOne.mockResolvedValue({ id: "r1", revokedAt: null });
       repo.findOneBy.mockResolvedValue(null);
-      await expect(
-        service.verifyRefreshToken("u1", "token"),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it("rejects after logout", async () => {
-      jwt.verifyAsync.mockResolvedValue({});
-      repo.findOneBy.mockResolvedValue(user({ hashedRefreshToken: null }));
-      await expect(
-        service.verifyRefreshToken("u1", "token"),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
-      expect(verify).not.toHaveBeenCalled();
-    });
-
-    it("rejects an old token after rotation", async () => {
-      jwt.verifyAsync.mockResolvedValue({});
-      repo.findOneBy.mockResolvedValue(user());
-      verifyMock.mockResolvedValue(false);
-      await expect(
-        service.verifyRefreshToken("u1", "old-token"),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.verifyRefreshToken(claims)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it("returns the role from the database, not the token", async () => {
-      jwt.verifyAsync.mockResolvedValue({ role: UserRole.CUSTOMER });
+      tokenRepo.findOne.mockResolvedValue({ id: "r1", revokedAt: null });
       repo.findOneBy.mockResolvedValue(user({ role: UserRole.ADMIN }));
-      verifyMock.mockResolvedValue(true);
-      await expect(service.verifyRefreshToken("u1", "token")).resolves.toEqual({
+      await expect(service.verifyRefreshToken(claims)).resolves.toEqual({
         userId: "u1",
         role: UserRole.ADMIN,
+        jti: "r1",
+        sid: "s1",
       });
     });
   });
 
-  it("refreshToken rotates the stored hash", async () => {
-    const result = await service.refreshToken({
+  describe("refreshToken", () => {
+    const authUser = {
       userId: "u1",
       role: UserRole.CUSTOMER,
+      jti: "r1",
+      sid: "s1",
+    };
+
+    it("revokes the session's tokens and issues a new pair in the same session", async () => {
+      const result = await service.refreshToken(authUser);
+
+      expect(result).toEqual({
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+      });
+      expect(manager.update).toHaveBeenNthCalledWith(
+        1,
+        Token,
+        { id: "r1", revokedAt: IsNull() },
+        { revokedAt: expect.any(Date) },
+      );
+      expect(manager.update).toHaveBeenNthCalledWith(
+        2,
+        Token,
+        { sessionId: "s1", revokedAt: IsNull() },
+        { revokedAt: expect.any(Date) },
+      );
+      expect(insertedRows().map((r) => r.sessionId)).toEqual(["s1", "s1"]);
     });
-    expect(result).toEqual({
-      accessToken: "access-token",
-      refreshToken: "refresh-token",
+
+    it("rejects when the refresh token was already used concurrently", async () => {
+      manager.update.mockResolvedValueOnce({ affected: 0 });
+      await expect(service.refreshToken(authUser)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(manager.insert).not.toHaveBeenCalled();
     });
-    expect(repo.update).toHaveBeenCalledWith(
-      { id: "u1" },
-      { hashedRefreshToken: "hashed:refresh-token" },
+  });
+
+  it("logout revokes only the current session", async () => {
+    await service.logout("s1");
+    expect(manager.update).toHaveBeenCalledWith(
+      Token,
+      { sessionId: "s1", revokedAt: IsNull() },
+      { revokedAt: expect.any(Date) },
     );
   });
 
-  it("logout clears the stored refresh token", async () => {
-    await service.logout("u1");
-    expect(repo.update).toHaveBeenCalledWith(
-      { id: "u1" },
-      { hashedRefreshToken: null },
+  it("isTokenActive only matches unrevoked, unexpired tokens of the given type", async () => {
+    tokenRepo.exists.mockResolvedValue(true);
+    await expect(service.isTokenActive("a1", TokenType.ACCESS)).resolves.toBe(
+      true,
     );
+    expect(tokenRepo.exists).toHaveBeenCalledWith({
+      where: {
+        id: "a1",
+        type: TokenType.ACCESS,
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(expect.any(Date)),
+      },
+    });
   });
 
   it("findUserById throws NotFound when missing", async () => {

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   Inject,
   Injectable,
@@ -7,20 +8,28 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
-import { hash, verify } from "argon2";
-import { FindOptionsWhere, Repository } from "typeorm";
+import { verify } from "argon2";
+import {
+  EntityManager,
+  FindOptionsWhere,
+  IsNull,
+  MoreThan,
+  Repository,
+} from "typeorm";
 import type { EnvConfigService } from "../../shared/env";
-import { JwtPayload } from "../../shared/types";
+import { AuthUser, JwtPayload } from "../../shared/types";
 import { saveUnique } from "../../shared/utils/saveUnique";
 import { User } from "../user/entities/user.entity";
 import { LoginDto } from "./dtos/login.dto";
 import { LoginResponseDto } from "./dtos/loginResponse.dto";
 import { SignUpDto } from "./dtos/signUp.dto";
+import { Token, TokenType } from "./entities/token.entity";
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(Token) private readonly tokenRepo: Repository<Token>,
     private readonly jwtService: JwtService,
     @Inject(ConfigService) private readonly config: EnvConfigService,
   ) {}
@@ -40,39 +49,85 @@ export class AuthService {
     return user;
   }
 
-  private async generateAuthTokens(payload: JwtPayload) {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.sign(payload),
-      this.jwtService.sign(payload, {
-        secret: this.config.get("REFRESH_TOKEN_SECRET"),
-        expiresIn: this.config.get("REFRESH_TOKEN_EXPIRES_IN"),
-      }),
+  private expiresAt(token: string) {
+    const { exp } = this.jwtService.decode<{ exp: number }>(token);
+    return new Date(exp * 1000);
+  }
+
+  private async generateAuthTokens(
+    { userId, role }: JwtPayload,
+    sessionId: string = randomUUID(),
+    manager: EntityManager = this.tokenRepo.manager,
+  ) {
+    const claims = { userId, role, sid: sessionId };
+    const accessJti = randomUUID();
+    const refreshJti = randomUUID();
+
+    const accessToken = this.jwtService.sign(claims, { jwtid: accessJti });
+    const refreshToken = this.jwtService.sign(claims, {
+      jwtid: refreshJti,
+      secret: this.config.get("REFRESH_TOKEN_SECRET"),
+      expiresIn: this.config.get("REFRESH_TOKEN_EXPIRES_IN"),
+    });
+
+    await manager.insert(Token, [
+      {
+        id: accessJti,
+        sessionId,
+        user: { id: userId },
+        type: TokenType.ACCESS,
+        expiresAt: this.expiresAt(accessToken),
+      },
+      {
+        id: refreshJti,
+        sessionId,
+        user: { id: userId },
+        type: TokenType.REFRESH,
+        expiresAt: this.expiresAt(refreshToken),
+      },
     ]);
 
     return { accessToken, refreshToken };
   }
 
-  async verifyRefreshToken(
-    userId: string,
-    refreshToken: string,
-  ): Promise<JwtPayload> {
-    try {
-      await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.config.get("REFRESH_TOKEN_SECRET"),
-      });
-    } catch {
+  private revokeWhere(
+    where: FindOptionsWhere<Token>,
+    manager: EntityManager = this.tokenRepo.manager,
+  ) {
+    return manager.update(
+      Token,
+      { ...where, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+  }
+
+  async isTokenActive(jti: string, type: TokenType) {
+    return await this.tokenRepo.exists({
+      where: {
+        id: jti,
+        type,
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
+      },
+    });
+  }
+
+  async verifyRefreshToken(claims: JwtPayload): Promise<AuthUser> {
+    const { userId, jti, sid } = claims;
+    if (!jti || !sid) throw new UnauthorizedException("Invalid Refresh Token");
+
+    const token = await this.tokenRepo.findOne({
+      where: { id: jti, type: TokenType.REFRESH, user: { id: userId } },
+    });
+    if (!token) throw new UnauthorizedException("Invalid Refresh Token");
+
+    if (token.revokedAt) {
+      await this.revokeWhere({ user: { id: userId } });
       throw new UnauthorizedException("Invalid Refresh Token");
     }
 
     const user = await this.findUser({ id: userId });
-    if (
-      !user.hashedRefreshToken ||
-      !(await verify(user.hashedRefreshToken, refreshToken))
-    ) {
-      throw new UnauthorizedException("Invalid Refresh Token");
-    }
-
-    return { userId, role: user.role };
+    return { userId, role: user.role, jti, sid };
   }
 
   async signUp(signUpDto: SignUpDto) {
@@ -91,11 +146,6 @@ export class AuthService {
       role: user.role,
     });
 
-    await this.userRepo.update(
-      { id: user.id },
-      { hashedRefreshToken: await hash(refreshToken) },
-    );
-
     return {
       name: user.name,
       role: user.role,
@@ -104,20 +154,18 @@ export class AuthService {
     };
   }
 
-  async refreshToken(payload: JwtPayload) {
-    const { accessToken, refreshToken } =
-      await this.generateAuthTokens(payload);
-    await this.userRepo.update(
-      { id: payload.userId },
-      { hashedRefreshToken: await hash(refreshToken) },
-    );
-    return {
-      accessToken,
-      refreshToken,
-    };
+  async refreshToken({ userId, role, jti, sid }: AuthUser) {
+    return await this.tokenRepo.manager.transaction(async (manager) => {
+      const claimed = await this.revokeWhere({ id: jti }, manager);
+      if (claimed.affected !== 1)
+        throw new UnauthorizedException("Invalid Refresh Token");
+
+      await this.revokeWhere({ sessionId: sid }, manager);
+      return await this.generateAuthTokens({ userId, role }, sid, manager);
+    });
   }
 
-  async logout(userId: string) {
-    await this.userRepo.update({ id: userId }, { hashedRefreshToken: null });
+  async logout(sessionId: string) {
+    await this.revokeWhere({ sessionId });
   }
 }

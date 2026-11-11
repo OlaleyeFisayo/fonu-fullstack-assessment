@@ -14,7 +14,7 @@ import {
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { ApiEnvelope } from "../../shared/decorators/response.decorator";
-import { JwtPayload } from "../../shared/types";
+import { AuthUser } from "../../shared/types";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dtos/login.dto";
 import { LoginResponseDto } from "./dtos/loginResponse.dto";
@@ -56,8 +56,8 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiEnvelope({ status: 200, message: "Logged out" })
   @ApiUnauthorizedResponse({ description: "Missing or invalid access token" })
-  async logout(@Req() req: { user: JwtPayload }) {
-    return await this.authService.logout(req.user.userId);
+  async logout(@Req() req: { user: AuthUser }) {
+    return await this.authService.logout(req.user.sid);
   }
 
   @UseGuards(RefreshJwtAuthGuard)
@@ -71,7 +71,7 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: "Invalid refresh token" })
   async refreshToken(
     @Body() _body: RefreshTokenDto,
-    @Req() req: { user: JwtPayload },
+    @Req() req: { user: AuthUser },
   ): Promise<RefreshTokenResponseDto> {
     return await this.authService.refreshToken(req.user);
   }
