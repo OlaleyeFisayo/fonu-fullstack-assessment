@@ -25,7 +25,7 @@ import { ApiEnvelope } from "../../shared/decorators/response.decorator";
 import { JwtPayload } from "../../shared/types";
 import { JwtAuthGuard } from "../auth/guards/jwtAuthGuard";
 import { Roles } from "../user/decorators/roles.decorator";
-import { User, UserRole } from "../user/entities/user.entity";
+import { UserRole } from "../user/entities/user.entity";
 import { RolesGuard } from "../user/guards/rolesGuard";
 import { OrderQueryDto } from "./dtos/orderQuery.dto";
 import { OrderResponseDto } from "./dtos/orderResponse.dto";
