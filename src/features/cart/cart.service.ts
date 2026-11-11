@@ -126,6 +126,7 @@ export class CartService {
 
       const products = await manager.find(Product, {
         where: { id: In(cart.items.map((i) => i.product.id)) },
+        order: { id: "ASC" },
         lock: { mode: "pessimistic_write" },
       });
       const byId = new Map(products.map((p) => [p.id, p]));
